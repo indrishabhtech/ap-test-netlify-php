@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Netlify → cPanel demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width:760px; margin:40px auto; padding:0 16px; }
+    label { display:block; margin: 12px 0 6px; }
+    input, textarea { width:100%; padding:8px; box-sizing:border-box; }
+    button { margin-top:10px; padding:10px 14px; }
+    .msg { margin-top:16px; padding:10px; border-radius:6px; background:#f4f4f4; }
+    .entry { border-bottom:1px solid #eee; padding:8px 0}
+  </style>
+</head>
+<body>
+  <h1>Contact demo (Netlify → cPanel PHP)</h1>
+
+  <form id="contactForm" autocomplete="off">
+    <label for="name">Name</label>
+    <input id="name" name="name" required />
+
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" required />
+
+    <label for="message">Message</label>
+    <textarea id="message" name="message" rows="4"></textarea>
+
+    <button type="submit">Send</button>
+  </form>
+
+  <div id="status" class="msg" aria-live="polite"></div>
+
+  <h2>Recent messages</h2>
+  <div id="messages"></div>
+
+<script>
+const backendSubmit = 'https://your-backend-domain.com/api/submit.php'; // <-- change
+const backendFetch = 'https://your-backend-domain.com/api/fetch_messages.php'; // <-- change
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('contactForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true;
+  const status = document.getElementById('status');
+  status.textContent = 'Sending...';
+
+  const data = {
+    name: document.getElementById('name').value.trim(),
+    email: document.getElementById('email').value.trim(),
+    message: document.getElementById('message').value.trim()
+  };
+
+  try {
+    const res = await fetch(backendSubmit, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const json = await res.json();
+    if (json.success) {
+      status.textContent = 'Saved! ID: ' + json.id;
+      e.target.reset();
+      await loadMessages();
+    } else {
+      status.textContent = 'Error: ' + (json.error || 'unknown error');
+    }
+  } catch (err) {
+    status.textContent = 'Network error: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function loadMessages() {
+  try {
+    const res = await fetch(backendFetch);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      const html = json.data.map(m =>
+        `<div class="entry"><strong>${escapeHtml(m.name)}</strong> (${escapeHtml(m.email)})<div>${escapeHtml(m.message)}</div><small>${m.created_at}</small></div>`
+      ).join('');
+      document.getElementById('messages').innerHTML = html || '<em>No messages yet.</em>';
+    } else {
+      document.getElementById('messages').innerHTML = '<em>Failed to load messages</em>';
+    }
+  } catch (err) {
+    document.getElementById('messages').innerHTML = '<em>Network error</em>';
+    console.error(err);
+  }
+}
+
+// initial load
+loadMessages();
+</script>
+</body>
+</html>
